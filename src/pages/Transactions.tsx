@@ -1,15 +1,24 @@
 import { motion } from "framer-motion";
 import { ArrowDownLeft, ArrowUpRight } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
-import { transactions } from "@/data/sampleData";
+import { useAuth } from "@/contexts/AuthContext";
+import { usePlayerTransactions } from "@/hooks/usePlayer";
 
 const Transactions = () => {
+  const { playerId } = useAuth();
+  const { data: transactions, isLoading } = usePlayerTransactions(playerId);
+
   return (
     <AppLayout>
       <div className="px-4 pt-6 pb-4 max-w-lg mx-auto">
         <h1 className="font-display text-2xl text-foreground mb-5">Transaction History</h1>
+        {isLoading && (
+          <div className="flex justify-center py-12">
+            <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+          </div>
+        )}
         <div className="space-y-2">
-          {transactions.map((tx, i) => (
+          {(transactions ?? []).map((tx, i) => (
             <motion.div
               key={tx.id}
               initial={{ opacity: 0, y: 8 }}
@@ -27,14 +36,17 @@ const Transactions = () => {
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground truncate">{tx.reason}</p>
-                <p className="text-xs text-muted-foreground">{tx.date}</p>
+                <p className="text-sm font-medium text-foreground truncate">{tx.description}</p>
+                <p className="text-xs text-muted-foreground">{new Date(tx.created_at).toLocaleDateString()} · {tx.type}</p>
               </div>
               <span className={`font-display text-sm whitespace-nowrap ${tx.amount > 0 ? "text-success" : "text-destructive"}`}>
                 {tx.amount > 0 ? "+" : ""}{tx.amount.toLocaleString()} UC
               </span>
             </motion.div>
           ))}
+          {!isLoading && (!transactions || transactions.length === 0) && (
+            <p className="text-sm text-muted-foreground text-center py-8">No transactions yet</p>
+          )}
         </div>
       </div>
     </AppLayout>

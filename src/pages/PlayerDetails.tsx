@@ -2,9 +2,20 @@ import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import AppLayout from "@/components/AppLayout";
-import { samplePlayer, attributes, badges, tendencies } from "@/data/sampleData";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  usePlayer,
+  usePlayerAttributes,
+  usePlayerBadges,
+  usePlayerTendencies,
+  usePlayerHotzones,
+  usePlayerSignatures,
+  usePlayerAccessories,
+  usePlayerGear,
+  usePlayerGameplan,
+} from "@/hooks/usePlayer";
 
-const tabs = ["Attributes", "Badges", "Tendencies", "Hotzones", "Signatures", "Accessories", "Gear"];
+const tabs = ["Attributes", "Badges", "Tendencies", "Hotzones", "Signatures", "Accessories", "Gear", "Gameplan"];
 
 const getAttrColor = (value: number) => {
   if (value >= 90) return "text-success";
@@ -32,29 +43,59 @@ const getBadgeColor = (level: string) => {
   }
 };
 
+const gameplanFields = [
+  { key: "shot_tendency", label: "Shot Tendency" },
+  { key: "drive_tendency", label: "Drive Tendency" },
+  { key: "playmaking_focus", label: "Playmaking Focus" },
+  { key: "defensive_aggression", label: "Defensive Aggression" },
+  { key: "rebounding_priority", label: "Rebounding Priority" },
+  { key: "tempo", label: "Tempo / Pace" },
+  { key: "usage", label: "Usage / Touches" },
+  { key: "freelance_style", label: "Freelance Style" },
+];
+
 const PlayerDetails = () => {
   const [searchParams] = useSearchParams();
   const initialTab = searchParams.get("tab") || "attributes";
   const [activeTab, setActiveTab] = useState(
-    tabs.findIndex((t) => t.toLowerCase() === initialTab.toLowerCase()) >= 0
-      ? tabs.findIndex((t) => t.toLowerCase() === initialTab.toLowerCase())
-      : 0
+    Math.max(0, tabs.findIndex((t) => t.toLowerCase() === initialTab.toLowerCase()))
   );
 
-  const categories = [...new Set(attributes.map((a) => a.category))];
+  const { playerId } = useAuth();
+  const { data: player } = usePlayer();
+  const { data: attributes } = usePlayerAttributes(playerId);
+  const { data: badges } = usePlayerBadges(playerId);
+  const { data: tendencies } = usePlayerTendencies(playerId);
+  const { data: hotzones } = usePlayerHotzones(playerId);
+  const { data: signatures } = usePlayerSignatures(playerId);
+  const { data: accessories } = usePlayerAccessories(playerId);
+  const { data: gear } = usePlayerGear(playerId);
+  const { data: gameplan } = usePlayerGameplan(playerId);
+
+  const teamName = (player as any)?.teams?.name || "Free Agent";
+  const categories = [...new Set((attributes ?? []).map((a) => a.category))];
+  const badgeCategories = [...new Set((badges ?? []).map((b) => b.category).filter(Boolean))];
+
+  // Map hotzones to grid
+  const hotZoneMap: Record<string, string> = {};
+  hotzones?.forEach((h) => { hotZoneMap[h.zone] = h.level; });
 
   return (
     <AppLayout>
       <div className="px-4 pt-6 pb-4 max-w-lg mx-auto">
         {/* Player Header */}
         <div className="flex items-center gap-4 mb-5">
-          <div className="w-16 h-16 rounded-2xl bg-secondary flex items-center justify-center border border-border">
-            <span className="font-display text-2xl text-primary">{samplePlayer.overall}</span>
+          <div className="w-16 h-16 rounded-2xl bg-secondary flex items-center justify-center border border-border overflow-hidden">
+            {player?.profile_image_url ? (
+              <img src={player.profile_image_url} alt={player.name} className="w-full h-full object-cover" />
+            ) : (
+              <span className="font-display text-2xl text-primary">{player?.overall}</span>
+            )}
           </div>
           <div>
-            <h1 className="font-display text-xl text-foreground">{samplePlayer.name}</h1>
-            <p className="text-sm text-muted-foreground">{samplePlayer.position} · {samplePlayer.archetype}</p>
-            <p className="text-xs text-muted-foreground">{samplePlayer.team}</p>
+            <h1 className="font-display text-xl text-foreground">{player?.name}</h1>
+            <p className="text-sm text-muted-foreground">{player?.position} · {player?.archetype}</p>
+            <p className="text-xs text-muted-foreground">{teamName}</p>
           </div>
         </div>
 
@@ -84,14 +125,15 @@ const PlayerDetails = () => {
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.2 }}
           >
+            {/* Attributes */}
             {activeTab === 0 && (
               <div className="space-y-5">
                 {categories.map((cat) => (
                   <div key={cat}>
                     <h3 className="font-display text-xs text-muted-foreground uppercase tracking-wider mb-2">{cat}</h3>
                     <div className="space-y-1.5">
-                      {attributes.filter((a) => a.category === cat).map((attr) => (
-                        <div key={attr.name} className="glass-card p-3 flex items-center gap-3">
+                      {(attributes ?? []).filter((a) => a.category === cat).map((attr) => (
+                        <div key={attr.id} className="glass-card p-3 flex items-center gap-3">
                           <span className="text-sm text-foreground flex-1">{attr.name}</span>
                           <div className="w-24 h-1.5 rounded-full bg-secondary overflow-hidden">
                             <motion.div
@@ -109,17 +151,21 @@ const PlayerDetails = () => {
                     </div>
                   </div>
                 ))}
+                {(!attributes || attributes.length === 0) && (
+                  <p className="text-sm text-muted-foreground text-center py-8">No attributes set yet</p>
+                )}
               </div>
             )}
 
+            {/* Badges */}
             {activeTab === 1 && (
               <div className="space-y-5">
-                {[...new Set(badges.map((b) => b.category))].map((cat) => (
+                {badgeCategories.map((cat) => (
                   <div key={cat}>
                     <h3 className="font-display text-xs text-muted-foreground uppercase tracking-wider mb-2">{cat}</h3>
                     <div className="grid grid-cols-2 gap-2">
-                      {badges.filter((b) => b.category === cat).map((badge) => (
-                        <div key={badge.name} className={`glass-card p-3 flex items-center justify-between border ${getBadgeColor(badge.level)}`}>
+                      {(badges ?? []).filter((b) => b.category === cat).map((badge) => (
+                        <div key={badge.id} className={`glass-card p-3 flex items-center justify-between border ${getBadgeColor(badge.level)}`}>
                           <span className="text-sm">{badge.name}</span>
                           <span className="text-[10px] font-bold uppercase tracking-wider">{badge.level}</span>
                         </div>
@@ -127,13 +173,17 @@ const PlayerDetails = () => {
                     </div>
                   </div>
                 ))}
+                {(!badges || badges.length === 0) && (
+                  <p className="text-sm text-muted-foreground text-center py-8">No badges set yet</p>
+                )}
               </div>
             )}
 
+            {/* Tendencies */}
             {activeTab === 2 && (
               <div className="space-y-1.5">
-                {tendencies.map((t) => (
-                  <div key={t.name} className="glass-card p-3 flex items-center gap-3">
+                {(tendencies ?? []).map((t) => (
+                  <div key={t.id} className="glass-card p-3 flex items-center gap-3">
                     <span className="text-sm text-foreground flex-1">{t.name}</span>
                     <div className="w-24 h-1.5 rounded-full bg-secondary overflow-hidden">
                       <motion.div
@@ -146,20 +196,28 @@ const PlayerDetails = () => {
                     <span className="font-display text-sm text-foreground w-8 text-right">{t.value}</span>
                   </div>
                 ))}
+                {(!tendencies || tendencies.length === 0) && (
+                  <p className="text-sm text-muted-foreground text-center py-8">No tendencies set yet</p>
+                )}
               </div>
             )}
 
+            {/* Hotzones */}
             {activeTab === 3 && (
               <div className="glass-card p-6 text-center">
                 <div className="grid grid-cols-5 grid-rows-5 gap-1 max-w-[240px] mx-auto mb-4">
                   {Array.from({ length: 25 }).map((_, i) => {
-                    const hot = [2, 6, 7, 8, 11, 12, 13, 16, 17, 18, 22];
-                    const isHot = hot.includes(i);
+                    const zoneKey = `zone_${i}`;
+                    const level = hotZoneMap[zoneKey] || "neutral";
+                    const isHot = level === "hot";
+                    const isCold = level === "cold";
                     return (
                       <div
                         key={i}
                         className={`aspect-square rounded-lg ${
-                          isHot ? "bg-destructive/60 border border-destructive/40" : "bg-secondary border border-border"
+                          isHot ? "bg-destructive/60 border border-destructive/40" :
+                          isCold ? "bg-info/40 border border-info/30" :
+                          "bg-secondary border border-border"
                         }`}
                       />
                     );
@@ -169,12 +227,69 @@ const PlayerDetails = () => {
               </div>
             )}
 
-            {(activeTab === 4 || activeTab === 5 || activeTab === 6) && (
-              <div className="glass-card p-8 text-center">
-                <p className="text-muted-foreground text-sm">
-                  {tabs[activeTab]} coming soon
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">This section will be available in a future update.</p>
+            {/* Signatures */}
+            {activeTab === 4 && (
+              <div className="space-y-2">
+                {(signatures ?? []).map((s) => (
+                  <div key={s.id} className="glass-card p-4 flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground uppercase tracking-wider">{s.category}</span>
+                    <span className="text-sm font-medium text-foreground">{s.name}</span>
+                  </div>
+                ))}
+                {(!signatures || signatures.length === 0) && (
+                  <p className="text-sm text-muted-foreground text-center py-8">No signatures set yet</p>
+                )}
+              </div>
+            )}
+
+            {/* Accessories */}
+            {activeTab === 5 && (
+              <div className="space-y-2">
+                {(accessories ?? []).map((a) => (
+                  <div key={a.id} className="glass-card p-4 flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground uppercase tracking-wider">{a.slot}</span>
+                    <span className="text-sm font-medium text-foreground">{a.name}</span>
+                  </div>
+                ))}
+                {(!accessories || accessories.length === 0) && (
+                  <p className="text-sm text-muted-foreground text-center py-8">No accessories set yet</p>
+                )}
+              </div>
+            )}
+
+            {/* Gear */}
+            {activeTab === 6 && (
+              <div className="space-y-2">
+                {(gear ?? []).map((g) => (
+                  <div key={g.id} className="glass-card p-4 flex items-center justify-between">
+                    <div>
+                      <span className="text-xs text-muted-foreground uppercase tracking-wider">{g.slot}</span>
+                      {g.brand && <span className="text-xs text-primary ml-2">{g.brand}</span>}
+                    </div>
+                    <span className="text-sm font-medium text-foreground">{g.name}</span>
+                  </div>
+                ))}
+                {(!gear || gear.length === 0) && (
+                  <p className="text-sm text-muted-foreground text-center py-8">No gear set yet</p>
+                )}
+              </div>
+            )}
+
+            {/* Gameplan */}
+            {activeTab === 7 && (
+              <div className="space-y-2">
+                {gameplan ? (
+                  gameplanFields.map((f) => (
+                    <div key={f.key} className="glass-card p-4 flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground">{f.label}</span>
+                      <span className="text-sm font-semibold text-foreground capitalize">
+                        {(gameplan as any)[f.key] || "—"}
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-8">No gameplan set yet</p>
+                )}
               </div>
             )}
           </motion.div>

@@ -2,6 +2,7 @@ import { ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Home, User, TrendingUp, Gift, Trophy, Shield } from "lucide-react";
 import { motion } from "framer-motion";
+import { useAuth } from "@/contexts/AuthContext";
 
 const navItems = [
   { path: "/dashboard", icon: Home, label: "Home" },
@@ -13,12 +14,12 @@ const navItems = [
 
 interface AppLayoutProps {
   children: ReactNode;
-  showAdmin?: boolean;
 }
 
-const AppLayout = ({ children, showAdmin = true }: AppLayoutProps) => {
+const AppLayout = ({ children }: AppLayoutProps) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { isAdmin } = useAuth();
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -53,7 +54,7 @@ const AppLayout = ({ children, showAdmin = true }: AppLayoutProps) => {
               </button>
             );
           })}
-          {showAdmin && (
+          {isAdmin && (
             <button
               onClick={() => navigate("/admin")}
               className="tap-highlight flex flex-col items-center gap-0.5 py-2 px-3 relative"

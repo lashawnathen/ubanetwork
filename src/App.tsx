@@ -2,7 +2,9 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { AuthProvider } from "@/contexts/AuthContext";
+import ProtectedRoute from "@/components/ProtectedRoute";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import PlayerDetails from "./pages/PlayerDetails";
@@ -22,17 +24,19 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Login />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/player" element={<PlayerDetails />} />
-            <Route path="/upgrades" element={<UpgradeCenter />} />
-            <Route path="/rewards" element={<DailyRewards />} />
-            <Route path="/transactions" element={<Transactions />} />
-            <Route path="/rankings" element={<Rankings />} />
-            <Route path="/admin" element={<Admin />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+          <AuthProvider>
+            <Routes>
+              <Route path="/" element={<Login />} />
+              <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+              <Route path="/player" element={<ProtectedRoute><PlayerDetails /></ProtectedRoute>} />
+              <Route path="/upgrades" element={<ProtectedRoute><UpgradeCenter /></ProtectedRoute>} />
+              <Route path="/rewards" element={<ProtectedRoute><DailyRewards /></ProtectedRoute>} />
+              <Route path="/transactions" element={<ProtectedRoute><Transactions /></ProtectedRoute>} />
+              <Route path="/rankings" element={<ProtectedRoute><Rankings /></ProtectedRoute>} />
+              <Route path="/admin" element={<ProtectedRoute requireAdmin><Admin /></ProtectedRoute>} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </AuthProvider>
         </BrowserRouter>
       </div>
     </TooltipProvider>
