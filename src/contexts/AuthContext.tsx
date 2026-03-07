@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -29,8 +29,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [playerId, setPlayerId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchRoleAndPlayer = async (userId: string) => {
-    // Check admin role
+  const fetchRoleAndPlayer = useCallback(async (userId: string) => {
     const { data: roles } = await supabase
       .from("user_roles")
       .select("role")
@@ -38,7 +37,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     
     setIsAdmin(roles?.some((r) => r.role === "admin") ?? false);
 
-    // Get assigned player
     const { data: players } = await supabase
       .from("players")
       .select("id")
@@ -46,17 +44,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       .limit(1);
     
     setPlayerId(players?.[0]?.id ?? null);
-  };
+  }, []);
 
   useEffect(() => {
-    // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      (_event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
         
         if (session?.user) {
-          // Use setTimeout to avoid Supabase deadlock
           setTimeout(() => fetchRoleAndPlayer(session.user.id), 0);
         } else {
           setIsAdmin(false);
@@ -66,7 +62,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     );
 
-    // THEN check existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
@@ -77,14 +72,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [fetchRoleAndPlayer]);
 
   const signOut = async () => {
     await supabase.auth.signOut();
-    setSession(null);
-    setUser(null);
-    setIsAdmin(false);
-    setPlayerId(null);
   };
 
   return (
