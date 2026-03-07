@@ -2,10 +2,55 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { Gift, Check, Flame } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
-import { dailyRewards, samplePlayer } from "@/data/sampleData";
+import { useAuth } from "@/contexts/AuthContext";
+import { usePlayer, useLeagueSettings, useClaimDailyReward } from "@/hooks/usePlayer";
+import { toast } from "@/hooks/use-toast";
 
 const DailyRewards = () => {
-  const [claimed, setClaimed] = useState(false);
+  const { playerId } = useAuth();
+  const { data: player } = usePlayer();
+  const { data: settings } = useLeagueSettings();
+  const claimReward = useClaimDailyReward();
+  const [claimedResult, setClaimedResult] = useState<{ rewardAmount: number; newStreak: number } | null>(null);
+
+  const maxStreak = settings?.daily_reward_streak_max ?? 7;
+  const base = settings?.daily_reward_base ?? 500;
+  const bonus = settings?.daily_reward_streak_bonus ?? 100;
+
+  // Check if already claimed today
+  const today = new Date().toISOString().split("T")[0];
+  const lastClaimDate = player?.last_daily_claim
+    ? new Date(player.last_daily_claim).toISOString().split("T")[0]
+    : null;
+  const alreadyClaimed = lastClaimDate === today || !!claimedResult;
+
+  const handleClaim = async () => {
+    if (!player || !playerId || !settings) return;
+    try {
+      const result = await claimReward.mutateAsync({
+        playerId,
+        currentBalance: player.uc_balance,
+        currentStreak: player.daily_streak,
+        lastClaim: player.last_daily_claim,
+        settings,
+      });
+      setClaimedResult(result);
+      toast({ title: "Reward Claimed!", description: `+${result.rewardAmount} UC` });
+    } catch (err: any) {
+      toast({ title: "Claim Failed", description: err.message, variant: "destructive" });
+    }
+  };
+
+  const currentStreak = claimedResult?.newStreak ?? player?.daily_streak ?? 0;
+
+  // Generate reward grid
+  const rewardDays = Array.from({ length: maxStreak }, (_, i) => {
+    const day = i + 1;
+    const reward = base + bonus * i;
+    const isPast = day < currentStreak || (day === currentStreak && alreadyClaimed);
+    const isToday = day === currentStreak + 1 && !alreadyClaimed;
+    return { day, reward, isPast, isToday };
+  });
 
   return (
     <AppLayout>
@@ -13,42 +58,39 @@ const DailyRewards = () => {
         <h1 className="font-display text-2xl text-foreground mb-1">Daily Rewards</h1>
         <div className="flex items-center gap-2 mb-6">
           <Flame className="w-4 h-4 text-accent" />
-          <span className="text-sm text-accent font-semibold">{samplePlayer.dailyStreak} Day Streak</span>
+          <span className="text-sm text-accent font-semibold">{currentStreak} Day Streak</span>
         </div>
 
         {/* Reward Grid */}
         <div className="grid grid-cols-4 gap-2 mb-6">
-          {dailyRewards.map((r, i) => {
-            const isToday = i === 6;
-            const isClaimed = r.claimed || (isToday && claimed);
-            return (
-              <motion.div
-                key={r.day}
-                className={`glass-card p-3 flex flex-col items-center gap-1 relative ${
-                  isToday && !claimed ? "glow-primary border-primary/30" : ""
-                } ${isClaimed ? "opacity-60" : ""}`}
-                whileHover={{ scale: 1.02 }}
-              >
-                <span className="text-[10px] text-muted-foreground uppercase">Day {r.day}</span>
-                {isClaimed ? (
-                  <Check className="w-5 h-5 text-success" />
-                ) : (
-                  <Gift className={`w-5 h-5 ${isToday ? "text-primary" : "text-muted-foreground"}`} />
-                )}
-                <span className="text-[10px] font-semibold text-foreground text-center leading-tight">{r.reward}</span>
-              </motion.div>
-            );
-          })}
+          {rewardDays.map((r) => (
+            <motion.div
+              key={r.day}
+              className={`glass-card p-3 flex flex-col items-center gap-1 relative ${
+                r.isToday ? "glow-primary border-primary/30" : ""
+              } ${r.isPast ? "opacity-60" : ""}`}
+              whileHover={{ scale: 1.02 }}
+            >
+              <span className="text-[10px] text-muted-foreground uppercase">Day {r.day}</span>
+              {r.isPast ? (
+                <Check className="w-5 h-5 text-success" />
+              ) : (
+                <Gift className={`w-5 h-5 ${r.isToday ? "text-primary" : "text-muted-foreground"}`} />
+              )}
+              <span className="text-[10px] font-semibold text-foreground text-center leading-tight">{r.reward} UC</span>
+            </motion.div>
+          ))}
         </div>
 
         {/* Claim Button */}
-        {!claimed ? (
+        {!alreadyClaimed ? (
           <motion.button
-            onClick={() => setClaimed(true)}
-            className="tap-highlight w-full py-4 rounded-2xl bg-primary text-primary-foreground font-display text-lg uppercase tracking-wider glow-primary"
+            onClick={handleClaim}
+            disabled={claimReward.isPending}
+            className="tap-highlight w-full py-4 rounded-2xl bg-primary text-primary-foreground font-display text-lg uppercase tracking-wider glow-primary disabled:opacity-70"
             whileTap={{ scale: 0.97 }}
           >
-            Claim Today's Reward
+            {claimReward.isPending ? "Claiming..." : "Claim Today's Reward"}
           </motion.button>
         ) : (
           <motion.div
@@ -58,7 +100,9 @@ const DailyRewards = () => {
           >
             <div className="text-4xl mb-2">🎉</div>
             <h2 className="font-display text-xl text-accent mb-1">Reward Claimed!</h2>
-            <p className="text-sm text-muted-foreground">+1000 UC & Badge Token added to your account</p>
+            <p className="text-sm text-muted-foreground">
+              +{claimedResult?.rewardAmount ?? base} UC added to your account
+            </p>
             <p className="text-xs text-muted-foreground mt-3">Come back tomorrow to keep your streak!</p>
           </motion.div>
         )}
